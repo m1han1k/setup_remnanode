@@ -55,6 +55,10 @@
     sudo visudo
     # Добавить строку: admin ALL=(ALL) NOPASSWD: /usr/sbin/ufw
 
+  установить планировщик
+    sudo apt-get install -y cron
+    sudo systemctl enable --now cron
+
 ═══════════════════════════════════════════════════════════════════════════════
   ШАГ 2: КЛОНИРОВАНИЕ ПРОЕКТА
 ═══════════════════════════════════════════════════════════════════════════════
@@ -79,7 +83,7 @@
 
   cd /opt/remnanode
   chmod +x setup-remnanode.sh         # Выданы права на выполнение
-  ./setup-remnanode.sh                # ГЛАВНЫЙ СКРИПТ
+  sudo ./setup-remnanode.sh                # ГЛАВНЫЙ СКРИПТ
 
 Скрипт интерактивно запросит:
 

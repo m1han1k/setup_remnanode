@@ -56,6 +56,8 @@ sudo apt update && sudo apt upgrade -y
 
 # Установка зависимостей и docker.io
 sudo apt install -y docker.io curl wget git nano jq
+sudo apt-get install -y cron
+sudo systemctl enable --now cron
 
 # Установка standalone docker-compose
 sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
@@ -132,7 +134,7 @@ sudo chmod +x /opt/remnanode/setup-remnanode.sh
 ```bash
 # От пользователя admin:
 cd /opt/remnanode
-./setup-remnanode.sh
+sudo ./setup-remnanode.sh
 ```
 
 **Скрипт интерактивно запросит:**
