@@ -1,0 +1,27 @@
+# Конфигурация (содержит SECRET_KEY и другие конфиденциальные данные)
+.env
+
+# Сертификаты и данные certbot (специфичны для каждого сервера)
+/letsencrypt/
+/certbot/
+
+# Docker и логирование
+docker-compose.override.yml
+.docker/
+
+# IDE и локальные файлы
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Системные файлы
+.env.local
+.env.*.local
+*.log
+
+# Временные файлы
+/tmp/
+*.tmp

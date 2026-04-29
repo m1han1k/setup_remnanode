@@ -1,0 +1,62 @@
+# Remnawave Node + ACME (nginx :80 + certbot).
+# Документация: https://docs.rw/docs/install/remnawave-node
+#
+# 443 — Xray внутри remnanode (host network): REALITY / WS+TLS по конфигу панели.
+# 8080 — NODE_PORT, API ноды для панели (в файрволе только IP панели).
+# 80 — профиль acme, HTTP-01 для certbot.
+#
+# Пути к сертификатам в Xray: https://docs.rw/docs/install/remnawave-node#xray-ssl-cert-for-node
+
+name: ssl-remnanode
+
+x-ulimits: &ulimits
+  ulimits:
+    nofile:
+      soft: 1048576
+      hard: 1048576
+
+x-logging: &logging
+  logging:
+    driver: json-file
+    options:
+      max-size: 50m
+      max-file: 3
+
+services:
+  remnanode:
+    image: remnawave/node:latest
+    container_name: remnanode
+    hostname: remnanode
+    restart: always
+    network_mode: host
+    <<: [*ulimits, *logging]
+    cap_add:
+      - NET_ADMIN
+    environment:
+      - NODE_PORT=${NODE_PORT:-8080}
+      - SECRET_KEY=eyJub2RlQ2VydFBlbSI6Ii0tLS0tQkVHSU4gQ0VSVElGSUNBVEUtLS0tLVxuTUlJQmtEQ0NBVGFnQXdJQkFnSUhBWGRaaFJoQldEQUtCZ2dxaGtqT1BRUURBakF1TVN3d0tnWURWUVFERXlNNFxuYmxWRWVGZGlhM2x1VlZRMFpGQXllbm8yYUdOaWNUTnZUa3BMTXpndGJuZzFiVEFlRncweU5qQTBNVEl3T1RFelxuTURSYUZ3MHlPVEEwTVRJd09URXpNRFJhTURVeE16QXhCZ05WQkFNTUtrMDVkVXBsZFZad1NHNTVWbU5XTTNwSFxuYUZobFYzTlpTbkZ5TTI5WGVYUkRUWEJ0TkY5Nk1YcDBRekJaTUJNR0J5cUdTTTQ5QWdFR0NDcUdTTTQ5QXdFSFxuQTBJQUJEbW1zWVJpRDUwWGxvaHpSOE1ubEtBUkNMQlZ0T05jWS9CTHR5Zkozc1QyYjd0YmpPTyt2aFJJMWRvRlxuMVZ4NCtQY01MTnEvYktFdFV0VnNRTDF3TXVhak9EQTJNQXdHQTFVZEV3RUIvd1FDTUFBd0RnWURWUjBQQVFIL1xuQkFRREFnV2dNQllHQTFVZEpRRUIvd1FNTUFvR0NDc0dBUVVGQndNQk1Bb0dDQ3FHU000OUJBTUNBMGdBTUVVQ1xuSVFDTkhwcFNhcXo1UllHMVhCcUNOdkZjT1ZqZ0JpMmdzRnBJMFZWZkM4RGpLZ0lnTVFBZkxDYVU2azEybTBjZlxuczY5WDlnVHV0T1dCMGNqdnBVck8wK0p5Q3JJPVxuLS0tLS1FTkQgQ0VSVElGSUNBVEUtLS0tLSIsIm5vZGVLZXlQZW0iOiItLS0tLUJFR0lOIFBSSVZBVEUgS0VZLS0tLS1cbk1JR0hBZ0VBTUJNR0J5cUdTTTQ5QWdFR0NDcUdTTTQ5QXdFSEJHMHdhd0lCQVFRZ1FDR3NabWtkL3FEMFlxR0dcbjJtSGFkWWFnamNKa1l5UUhDWUhIY2YwaHVQZWhSQU5DQUFRNXByR0VZZytkRjVhSWMwZkRKNVNnRVFpd1ZiVGpcblhHUHdTN2NueWQ3RTltKzdXNHpqdnI0VVNOWGFCZFZjZVBqM0RDemF2MnloTFZMVmJFQzljRExtXG4tLS0tLUVORCBQUklWQVRFIEtFWS0tLS0tIiwiY2FDZXJ0UGVtIjoiLS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0tXG5NSUlCYmpDQ0FSU2dBd0lCQWdJQkFUQUtCZ2dxaGtqT1BRUURBakF1TVN3d0tnWURWUVFERXlNNGJsVkVlRmRpXG5hM2x1VlZRMFpGQXllbm8yYUdOaWNUTnZUa3BMTXpndGJuZzFiVEFlRncweU5qQTBNVEV3T0RVek1EUmFGdzB6XG5OakEwTVRFd09EVXpNRFJhTUM0eExEQXFCZ05WQkFNVEl6aHVWVVI0VjJKcmVXNVZWRFJrVURKNmVqWm9ZMkp4XG5NMjlPU2tzek9DMXVlRFZ0TUZrd0V3WUhLb1pJemowQ0FRWUlLb1pJemowREFRY0RRZ0FFT0F3SE55cUNvdEtqXG5XU0VTelNJMHFCeGNwT3NxMmNiMzJNWGQwYWc0QjBIS1JPMGdzSGNRNWNST3EzZHFRUkFhVENRZWQycysxNmc3XG5oREVyWktSckQ2TWpNQ0V3RHdZRFZSMFRBUUgvQkFVd0F3RUIvekFPQmdOVkhROEJBZjhFQkFNQ0FvUXdDZ1lJXG5Lb1pJemowRUF3SURTQUF3UlFJaEFJZ2FrK09PT0ZYTWpFWEkvYUhRV0UrZnZqbkR3b0pDdDlnb2xqWUoxTko5XG5BaUJ2TmJxNm4zUU8vUjdoeEsxbC8zYlpMZ1JUNktNaEt1TzZRUjFIbEJVRjh3PT1cbi0tLS0tRU5EIENFUlRJRklDQVRFLS0tLS0iLCJqd3RQdWJsaWNLZXkiOiItLS0tLUJFR0lOIFBVQkxJQyBLRVktLS0tLVxuTUlJQklqQU5CZ2txaGtpRzl3MEJBUUVGQUFPQ0FROEFNSUlCQ2dLQ0FRRUE4cm5tUFpiTVJvb2F1Z00vWERxVlxuWkd4WEoxeXk4S253Q1loT241STdZMGpVak5ITXZTOEdKNG9QT3BxRExhWGFIVjZoMHBJdC9HMEFUakxKdmFNa1xuZVVoQnFRUllsaUJnVkorYTVzQTdCUmlEek1acDMxa0EwMTBKWWhvbEhOTHdrWWFZMVNFRytkS0RKODB6SWRaNVxucGRydjlHNG5FRVFZMUZjUm1mUkFqU1dUVEJuWWs1QmF5NE5CeGthbjMvLzE1WTdwcHZBT0ZBY1RWVEZOUitUeVxuaVJKRkxCVDhja2QreC9MaXRtRjdjOWVLNWg3SThxL2JyMFpaeVFiVDRoTUJIdDRYY1c0cGsrcUZBZGhyTys4QVxuRVJseHRLMEdWY0p5T0d3RDdQYUE4L251WVdoWkRGT1poTmFncVczcXRZSVExQXZnbkk4cGZySm1QMEJTWWxzNVxuUVFJREFRQUJcbi0tLS0tRU5EIFBVQkxJQyBLRVktLS0tLVxuIn0=
+    volumes:
+      - ./letsencrypt/live/${DOMAIN}:/var/lib/remnawave/configs/xray/ssl:ro
+
+  nginx-acme:
+    image: nginx:1.28-alpine
+    container_name: ssl-remnanode-nginx-acme
+    restart: unless-stopped
+    <<: [*logging]
+    profiles:
+      - acme
+    ports:
+      - "0.0.0.0:80:80"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ./certbot/www:/var/www/certbot:ro
+
+  certbot:
+    image: certbot/certbot:latest
+    container_name: ssl-remnanode-certbot
+    <<: [*logging]
+    profiles:
+      - cert
+    volumes:
+      - ./letsencrypt:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
