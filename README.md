@@ -6,118 +6,204 @@
 
 <details>
 <summary><h2>Предварительные настройки сервера перед использованием скрипта</h2></summary>
-  
-Подготовка сервера перед запуском setup-remnanode.sh
+# Подготовка сервера перед запуском setup-remnanode.sh
 
-Требования к серверу
+## Требования к серверу
 
 - ОС: Ubuntu 22.04 LTS (рекомендуется) или Debian 11/12
 - RAM: минимум 1 ГБ
-- Порт 80 и 443 должны быть свободны и доступны из интернета
+- Порты 80 и 443 должны быть свободны и доступны из интернета
 
 ---
-Шаг 1 — Обновить систему
 
+## Шаг 1 — Обновить систему
+
+```bash
 sudo apt update && sudo apt upgrade -y
+```
 
 ---
-Шаг 2 — Установить Docker
 
-### Установить зависимости
+## Шаг 2 — Установить Docker
+
+Установить зависимости:
+
+```bash
 sudo apt install -y ca-certificates curl gnupg lsb-release git
+```
 
-### Добавить официальный репозиторий Docker
+Добавить официальный GPG-ключ и репозиторий Docker:
+
+```bash
 sudo mkdir -p /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
 
-### Установить Docker и плагин Compose
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
+  sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+  https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | \
+  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+```
+
+Установить Docker и плагин Compose:
+
+```bash
 sudo apt update
 sudo apt install -y docker-ce docker-ce-cli containerd.io docker-compose-plugin
+```
 
-### Запустить и включить в автозагрузку
+Запустить Docker и добавить в автозагрузку:
+
+```bash
 sudo systemctl start docker
 sudo systemctl enable docker
+```
 
-### Проверка
+Проверить установку:
+
+```bash
 docker --version
 docker compose version
+```
 
 ---
-Шаг 3 — Создать пользователя admin (если его нет)
 
-### Проверить, существует ли пользователь
+## Шаг 3 — Создать пользователя `admin`
+
+Проверить, существует ли пользователь, и создать если нет:
+
+```bash
 id admin 2>/dev/null || sudo useradd -m -s /bin/bash admin
+```
 
-### Добавить в группу docker (чтобы работать без sudo для docker)
+Добавить пользователя в группу `docker` (чтобы не нужен был `sudo` для Docker):
+
+```bash
 sudo usermod -aG docker admin
+```
 
-### Установить пароль (запомните его)
+Установить пароль (запомните его):
+
+```bash
 sudo passwd admin
+```
 
 ---
-Шаг 4 — Настроить sudo без пароля для пользователя admin
 
-Это нужно, чтобы скрипт мог настроить UFW:
+## Шаг 4 — Настроить `sudo` без пароля для пользователя `admin`
 
+> Это нужно, чтобы скрипт мог настроить UFW автоматически.
+
+```bash
 echo "admin ALL=(ALL) NOPASSWD:ALL" | sudo tee /etc/sudoers.d/admin
+```
 
 ---
-Шаг 5 — Настроить DNS (делается у регистратора домена)
 
-Перед запуском скрипта домен уже должен указывать на IP этого сервера, иначе Let's Encrypt не выдаст сертификат.
+## Шаг 5 — Настроить DNS (у регистратора домена)
 
-1. Узнайте IP сервера: curl -4 ifconfig.me
-2. У регистратора домена создайте A-запись:
-  - Имя: node1.example.com (ваш поддомен)
-  - Тип: A
-  - Значение: IP сервера
-  - TTL: 300 (или минимальный)
-3. Подождите 5–15 минут и проверьте: nslookup node1.example.com — должен вернуть IP сервера
+> ⚠️ Домен должен указывать на IP сервера **до** запуска скрипта — иначе Let's Encrypt не выдаст SSL-сертификат.
+
+**1. Узнать IP сервера:**
+
+```bash
+curl -4 ifconfig.me
+```
+
+**2. У регистратора домена создать A-запись:**
+
+| Поле   | Значение               |
+|--------|------------------------|
+| Имя    | `node1.example.com`    |
+| Тип    | `A`                    |
+| Адрес  | IP вашего сервера      |
+| TTL    | `300` (или минимальный)|
+
+**3. Подождать 5–15 минут, затем проверить что DNS обновился:**
+
+```bash
+nslookup node1.example.com
+```
+
+Команда должна вернуть IP вашего сервера.
 
 ---
-Шаг 6 — Скопировать репозиторий на сервер
 
+## Шаг 6 — Скачать репозиторий на сервер
+
+```bash
 sudo mkdir -p /opt/remnanode
 sudo git clone https://github.com/m1han1k/setup_remnanode.git /opt/remnanode
 sudo chown -R admin:admin /opt/remnanode
 chmod +x /opt/remnanode/setup-remnanode.sh
 chmod +x /opt/remnanode/scripts/*.sh
+```
 
 ---
-Шаг 7 — Подготовить данные для скрипта
 
-Перед запуском скрипта нужно иметь под рукой:
+## Шаг 7 — Подготовить данные для скрипта
 
-| Параметр | Где взять |
-|---|---|
-| Домен | Тот, что настроили в шаге 5 |
-| Email | Любой — придут уведомления об истечении сертификата |
-| SECRET_KEY | В панели Remnawave → Ноды → «Добавить ноду» → скопировать SECRET_KEY |
-| IP панели | IP сервера, где установлена панель Remnawave (нужен для ограничения порта 8080) |
+Перед запуском скрипта нужно знать следующие параметры:
+
+| Параметр     | Где взять                                                                 |
+|--------------|---------------------------------------------------------------------------|
+| `Домен`      | Тот, что настроили в шаге 5                                               |
+| `Email`      | Любой — на него придут уведомления об истечении SSL-сертификата           |
+| `SECRET_KEY` | Панель Remnawave → Ноды → «Добавить ноду» → скопировать `SECRET_KEY`     |
+| `IP панели`  | IP сервера, где установлена панель Remnawave (нужен для ограничения порта 8080) |
 
 ---
-Шаг 8 — Запустить скрипт
 
-### Переключиться на пользователя admin (если вы root)
+## Шаг 8 — Запустить скрипт
+
+Если вы работаете под `root`, сначала переключитесь на пользователя `admin`:
+
+```bash
 su - admin
+```
 
+Перейти в папку и запустить скрипт:
+
+```bash
 cd /opt/remnanode
 ./setup-remnanode.sh
+```
 
 ---
-Что делает скрипт автоматически (не нужно делать вручную)
 
-- Настраивает UFW: открывает порты 22, 80, 443, 8080
-- Получает SSL сертификат от Let's Encrypt
-- Создаёт .env с конфигурацией
-- Запускает Docker-контейнер ноды
-- Настраивает автоматическое обновление сертификата (cron)
+## Что скрипт делает автоматически
 
-### Важно: порт 8080 скрипт открывает для всех. Если нужно ограничить только IP панели — после запуска скрипта выполните:
-- sudo ufw delete allow 8080/tcp
-- sudo ufw allow from <IP_ПАНЕЛИ> to any port 8080 proto tcp
-- sudo ufw reload
+Следующее делать **вручную не нужно** — скрипт выполнит всё сам:
+
+- Настроит UFW: откроет порты `22`, `80`, `443`, `8080`
+- Получит SSL-сертификат от Let's Encrypt
+- Создаст `.env`-файл с конфигурацией
+- Запустит Docker-контейнер ноды
+- Настроит автоматическое обновление сертификата через `cron`
+
+---
+
+## После запуска — ограничить доступ к порту 8080
+
+> ⚠️ По умолчанию скрипт открывает порт `8080` для всех IP. Если нужно разрешить доступ только с IP панели Remnawave — выполните следующие команды:
+
+Удалить правило «открыто для всех»:
+
+```bash
+sudo ufw delete allow 8080/tcp
+```
+
+Разрешить доступ только с IP вашей панели:
+
+```bash
+sudo ufw allow from <IP_ПАНЕЛИ> to any port 8080 proto tcp
+```
+
+Применить изменения:
+
+```bash
+sudo ufw reload
+```
 </details>
 
 ## 🚀 Быстрый старт
