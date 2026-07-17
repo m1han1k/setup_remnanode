@@ -84,6 +84,65 @@ ufw_allow() { # ufw_allow 443 tcp "комментарий"
 }
 
 # ---------------------------------------------------------------------------
+# Шаг 0. Обновление старой установки (безопасно запускать повторно)
+# ---------------------------------------------------------------------------
+# На нодах, поставленных старой версией setup-remnanode.sh:
+#  - docker-compose.yml монтирует только letsencrypt/live/ без archive/ —
+#    симлинки certbot внутри контейнера битые, Xray не видит сертификаты;
+#  - иногда отсутствует симлинк privkey.key → privkey.pem.
+# Здесь всё это чинится автоматически.
+
+echo ""
+log_info "=== Проверка установки ноды ==="
+
+COMPOSE_CHANGED=0
+if [[ -f docker-compose.yml ]]; then
+  if ! grep -q 'letsencrypt/archive' docker-compose.yml; then
+    log_info "Старый docker-compose.yml: добавляю mount letsencrypt/archive..."
+    sed -i 's|^\( *\)- \./letsencrypt/live/.*:/var/lib/remnawave/configs/xray/ssl:ro *$|&\n\1# certbot кладёт в live/ симлинки на ../../archive/<домен>/ — без этого mount'"'"'а они битые\n\1- ./letsencrypt/archive/${DOMAIN}:/var/lib/remnawave/configs/archive/${DOMAIN}:ro|' docker-compose.yml
+    if grep -q 'letsencrypt/archive' docker-compose.yml; then
+      COMPOSE_CHANGED=1
+      log_success "docker-compose.yml обновлён (mount letsencrypt/archive)"
+    else
+      log_warning "Не удалось пропатчить docker-compose.yml автоматически."
+      log_warning "Добавьте вручную в volumes сервиса remnanode:"
+      log_warning '  - ./letsencrypt/archive/${DOMAIN}:/var/lib/remnawave/configs/archive/${DOMAIN}:ro'
+    fi
+  else
+    log_success "docker-compose.yml уже содержит mount letsencrypt/archive"
+  fi
+else
+  log_warning "docker-compose.yml не найден в $ROOT — пропускаю проверку compose."
+fi
+
+# Симлинк privkey.key → privkey.pem (как требует документация Xray SSL)
+LIVE_DIR="letsencrypt/live/${DOMAIN}"
+if [[ -f "$LIVE_DIR/privkey.pem" && ! -e "$LIVE_DIR/privkey.key" ]]; then
+  ( cd "$LIVE_DIR" && ln -sf privkey.pem privkey.key )
+  log_success "Создан симлинк privkey.key → privkey.pem"
+fi
+
+# Пересоздаём/запускаем контейнер, если compose менялся или нода не запущена
+if (( COMPOSE_CHANGED )) || ! docker ps --format '{{.Names}}' | grep -qx remnanode; then
+  log_info "Перезапускаю контейнер remnanode с новой конфигурацией..."
+  docker compose up -d remnanode
+  sleep 3
+fi
+
+# Проверяем, что сертификат действительно читается внутри контейнера
+if docker ps --format '{{.Names}}' | grep -qx remnanode; then
+  if docker exec remnanode sh -c "cat $SSL_CERT >/dev/null 2>&1 && cat $SSL_KEY >/dev/null 2>&1"; then
+    log_success "Сертификаты читаются внутри контейнера"
+  else
+    log_warning "Сертификаты НЕ читаются внутри контейнера ($SSL_CERT)."
+    log_warning "Проверьте: docker exec remnanode ls -la /var/lib/remnawave/configs/xray/ssl/"
+    log_warning "Возможно, сертификат ещё не выпущен: ./scripts/issue-cert.sh"
+  fi
+else
+  log_warning "Контейнер remnanode не запущен — проверить сертификаты не могу."
+fi
+
+# ---------------------------------------------------------------------------
 # Шаг 1. Выбор протоколов
 # ---------------------------------------------------------------------------
 
@@ -104,8 +163,8 @@ ask_yn "1) Настроить VLESS XHTTP + TLS?"        y && WANT_XHTTP=1
 ask_yn "2) Настроить Hysteria2?"                y && WANT_HY2=1
 ask_yn "3) Настроить VLESS TCP + Reality?"      y && WANT_TCPR=1
 ask_yn "4) Настроить VLESS gRPC + Reality?"     y && WANT_GRPCR=1
-ask_yn "5) Настроить Trojan WS + TLS?"          n && WANT_TROJAN=1
-ask_yn "6) Настроить bridge-inbound (каскад)?"  n && WANT_BRIDGE=1
+ask_yn "5) Настроить Trojan WS + TLS?"          y && WANT_TROJAN=1
+ask_yn "6) Настроить bridge-inbound (каскад)?"  y && WANT_BRIDGE=1
 
 if (( WANT_XHTTP + WANT_HY2 + WANT_TCPR + WANT_GRPCR + WANT_TROJAN + WANT_BRIDGE == 0 )); then
   log_warning "Ничего не выбрано — выходим."

@@ -225,6 +225,45 @@ cd /opt/remnanode
 
 **📖 [Полная инструкция по развертыванию](DEPLOYMENT.md)**
 
+---
+
+## Настройка протоколов Xray
+
+В конце установки скрипт предложит настроить протоколы (все включены по умолчанию,
+на любой вопрос можно ответить `n`):
+
+| Протокол | Порт по умолчанию |
+|----------|-------------------|
+| VLESS XHTTP + TLS | 443/tcp |
+| Hysteria2 | 443/udp |
+| VLESS TCP + Reality | 4443/tcp |
+| VLESS gRPC + Reality | 8443/tcp |
+| Trojan WS + TLS | 2096/tcp |
+| Bridge-inbound (каскад) | 9999/tcp |
+
+Скрипт сам сгенерирует Reality-ключи и shortIds, откроет порты в UFW, соберёт
+готовый конфиг `xray-multiconfig.json` и проверит его через `xray -test` внутри
+контейнера. Останется вставить содержимое файла в панель Remnawave (Config ноды).
+
+Перенастроить протоколы можно в любой момент:
+
+```bash
+./scripts/setup-protocols.sh
+```
+
+### Обновление ноды, установленной старой версией скрипта
+
+На уже работающей ноде достаточно обновить репозиторий и запустить настройку
+протоколов — скрипт сам починит docker-compose.yml (mount `letsencrypt/archive`,
+без которого Xray не видел сертификаты), при необходимости пересоздаст контейнер
+и добавит новые протоколы:
+
+```bash
+cd /opt/remnanode
+git pull
+./scripts/setup-protocols.sh
+```
+
 **⚠️ Проблемы с установкой Docker?**
 - [DOCKER-INSTALL.md](DOCKER-INSTALL.md) — два варианта установки
 - [DOCKER-TROUBLESHOOT.md](DOCKER-TROUBLESHOOT.md) — решение проблем
