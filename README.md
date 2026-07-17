@@ -180,6 +180,7 @@ cd /opt/remnanode
 - Создаст `.env`-файл с конфигурацией
 - Запустит Docker-контейнер ноды
 - Настроит автоматическое обновление сертификата через `cron`
+- Предложит настроить протоколы Xray (см. раздел [Настройка протоколов Xray](#настройка-протоколов-xray)) — можно пропустить
 
 ---
 
@@ -222,6 +223,7 @@ cd /opt/remnanode
 - ✅ Получит SSL-сертификат от Let's Encrypt
 - ✅ Запустит контейнер ноды
 - ✅ Настроит автоматическое продление сертификата
+- ✅ Предложит настроить протоколы Xray (все включены по умолчанию, можно пропустить)
 
 **📖 [Полная инструкция по развертыванию](DEPLOYMENT.md)**
 
@@ -265,20 +267,33 @@ git pull
 ```
 
 **⚠️ Проблемы с установкой Docker?**
-- [DOCKER-INSTALL.md](DOCKER-INSTALL.md) — два варианта установки
-- [DOCKER-TROUBLESHOOT.md](DOCKER-TROUBLESHOOT.md) — решение проблем
 - Быстрое решение: `sudo bash docker-fix.sh`
 
 ---
 
 ## Порты
 
+**Базовые (открывает `setup-remnanode.sh`):**
+
 | Порт | Роль |
 |------|------|
 | **22** | SSH (управление сервером) |
 | **80** | HTTP — только для Let's Encrypt HTTP-01 валидации |
-| **443** | HTTPS — Xray слушает 443 для REALITY / WS+TLS |
+| **443/tcp** | HTTPS — Xray (VLESS XHTTP + TLS) |
 | **8080** | API ноды для панели (открыть только IP панели!) |
+
+**Протоколы (открывает `scripts/setup-protocols.sh` для выбранных протоколов):**
+
+| Порт | Протокол |
+|------|----------|
+| **443/tcp** | VLESS XHTTP + TLS |
+| **443/udp** | Hysteria2 |
+| **4443/tcp** | VLESS TCP + Reality |
+| **8443/tcp** | VLESS gRPC + Reality |
+| **2096/tcp** | Trojan WS + TLS |
+| **9999/tcp** | Bridge-inbound (каскад) |
+
+> Порты протоколов настраиваются при запуске скрипта — значения по умолчанию можно изменить.
 
 Сертификаты в контейнере: `/var/lib/remnawave/configs/xray/ssl/` — см. [XRay SSL cert for Node](https://docs.rw/docs/install/remnawave-node#xray-ssl-cert-for-node). Для **REALITY** сертификаты не требуются.
 
@@ -293,6 +308,7 @@ cd /opt/remnanode
 cp .env.example .env && nano .env   # Задайте DOMAIN, EMAIL, NODE_PORT, SECRET_KEY
 ./scripts/issue-cert.sh
 ./scripts/up.sh
+./scripts/setup-protocols.sh        # (опционально) настроить протоколы Xray
 ```
 
 ---
@@ -317,22 +333,27 @@ crontab -l | grep renew-cert
 
 ```
 /opt/remnanode/
-├── setup-remnanode.sh          # Главный скрипт настройки
+├── setup-remnanode.sh          # Главный скрипт установки ноды
 ├── .env                        # Конфигурация (создается скриптом)
 ├── .env.example                # Шаблон
 ├── docker-compose.yml          # Конфигурация контейнеров
+├── docker-fix.sh               # Быстрое решение проблем с Docker
+├── xray-multiconfig.json       # Готовый конфиг Xray (создается setup-protocols.sh)
 ├── README.md                   # Эта инструкция
 ├── DEPLOYMENT.md               # Подробное руководство
 ├── scripts/
 │   ├── bootstrap.sh            # Инициализация .env
 │   ├── issue-cert.sh           # Получение SSL-сертификата
 │   ├── renew-cert.sh           # Продление сертификата (Cron)
-│   └── up.sh                   # Запуск контейнера
+│   ├── up.sh                   # Запуск контейнера
+│   └── setup-protocols.sh      # Интерактивная настройка протоколов Xray
 ├── nginx/
 │   └── conf.d/00-acme.conf     # Конфиг для Let's Encrypt
 ├── certbot/                    # Данные certbot
 └── letsencrypt/                # Сертификаты (создается скриптом)
 ```
+
+> `xray-multiconfig.json` содержит приватные Reality-ключи и добавлен в `.gitignore` — в репозиторий не попадает.
 
 ---
 
