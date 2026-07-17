@@ -38,6 +38,9 @@ services:
       - "SECRET_KEY=${SECRET_KEY}"
     volumes:
       - ./letsencrypt/live/${DOMAIN}:/var/lib/remnawave/configs/xray/ssl:ro
+      # certbot кладёт в live/ относительные симлинки на ../../archive/<домен>/;
+      # без этого mount'а они внутри контейнера битые и Xray не видит сертификат.
+      - ./letsencrypt/archive/${DOMAIN}:/var/lib/remnawave/configs/archive/${DOMAIN}:ro
 
   nginx-acme:
     image: nginx:1.28-alpine
