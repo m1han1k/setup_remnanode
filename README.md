@@ -236,16 +236,17 @@ cd /opt/remnanode
 
 | Протокол | Порт по умолчанию |
 |----------|-------------------|
-| VLESS XHTTP + TLS | 443/tcp |
+| VLESS XHTTP + Reality | 443/tcp |
 | Hysteria2 | 443/udp |
 | VLESS TCP + Reality | 4443/tcp |
 | VLESS gRPC + Reality | 8443/tcp |
 | Trojan WS + TLS | 2096/tcp |
 | Bridge-inbound (каскад) | 9999/tcp |
 
-Скрипт сам сгенерирует Reality-ключи и shortIds, откроет порты в UFW, соберёт
-готовый конфиг `xray-multiconfig.json` и проверит его через `xray -test` внутри
-контейнера. Останется вставить содержимое файла в панель Remnawave (Config ноды).
+Скрипт сам сгенерирует Reality-ключи (свой keypair на каждый Reality-протокол —
+XHTTP, TCP, gRPC) и shortIds, откроет порты в UFW, соберёт готовый конфиг
+`xray-multiconfig.json` и проверит его через `xray -test` внутри контейнера.
+Останется вставить содержимое файла в панель Remnawave (Config ноды).
 
 Перенастроить протоколы можно в любой момент:
 
@@ -279,14 +280,14 @@ git pull
 |------|------|
 | **22** | SSH (управление сервером) |
 | **80** | HTTP — только для Let's Encrypt HTTP-01 валидации |
-| **443/tcp** | HTTPS — Xray (VLESS XHTTP + TLS) |
+| **443/tcp** | HTTPS — Xray (VLESS XHTTP + Reality) |
 | **8080** | API ноды для панели (открыть только IP панели!) |
 
 **Протоколы (открывает `scripts/setup-protocols.sh` для выбранных протоколов):**
 
 | Порт | Протокол |
 |------|----------|
-| **443/tcp** | VLESS XHTTP + TLS |
+| **443/tcp** | VLESS XHTTP + Reality |
 | **443/udp** | Hysteria2 |
 | **4443/tcp** | VLESS TCP + Reality |
 | **8443/tcp** | VLESS gRPC + Reality |

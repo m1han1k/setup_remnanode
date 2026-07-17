@@ -150,7 +150,7 @@ echo ""
 log_info "=== Настройка протоколов Xray для ноды $DOMAIN ==="
 echo ""
 echo "Доступные протоколы:"
-echo "  1) VLESS XHTTP + TLS       (реальный сертификат, 443/tcp)"
+echo "  1) VLESS XHTTP + Reality   (443/tcp)"
 echo "  2) Hysteria2               (реальный сертификат, 443/udp)"
 echo "  3) VLESS TCP  + Reality    (4443/tcp)"
 echo "  4) VLESS gRPC + Reality    (8443/tcp)"
@@ -159,7 +159,7 @@ echo "  6) Bridge-inbound для каскада (VLESS TCP без TLS, 9999/tcp)
 echo ""
 
 WANT_XHTTP=0; WANT_HY2=0; WANT_TCPR=0; WANT_GRPCR=0; WANT_TROJAN=0; WANT_BRIDGE=0
-ask_yn "1) Настроить VLESS XHTTP + TLS?"        y && WANT_XHTTP=1
+ask_yn "1) Настроить VLESS XHTTP + Reality?"     y && WANT_XHTTP=1
 ask_yn "2) Настроить Hysteria2?"                y && WANT_HY2=1
 ask_yn "3) Настроить VLESS TCP + Reality?"      y && WANT_TCPR=1
 ask_yn "4) Настроить VLESS gRPC + Reality?"     y && WANT_GRPCR=1
@@ -173,7 +173,7 @@ fi
 
 echo ""
 log_info "Порты (Enter — оставить по умолчанию):"
-PORT_XHTTP=443;  (( WANT_XHTTP ))  && PORT_XHTTP=$(ask_port "VLESS XHTTP+TLS" 443)
+PORT_XHTTP=443;  (( WANT_XHTTP ))  && PORT_XHTTP=$(ask_port "VLESS XHTTP+Reality" 443)
 PORT_HY2=443;    (( WANT_HY2 ))    && PORT_HY2=$(ask_port "Hysteria2 (udp)" 443)
 PORT_TCPR=4443;  (( WANT_TCPR ))   && PORT_TCPR=$(ask_port "VLESS TCP+Reality" 4443)
 PORT_GRPCR=8443; (( WANT_GRPCR ))  && PORT_GRPCR=$(ask_port "VLESS gRPC+Reality" 8443)
@@ -195,33 +195,53 @@ for entry in "XHTTP:$PORT_XHTTP:$WANT_XHTTP" "TCPR:$PORT_TCPR:$WANT_TCPR" \
 done
 
 # ---------------------------------------------------------------------------
-# Шаг 2. Параметры Reality (общий keypair на все Reality-инбаунды)
+# Шаг 2. Параметры Reality (у каждого Reality-инбаунда — свой keypair)
 # ---------------------------------------------------------------------------
+# Отдельный ключ на инбаунд, а не общий на всех — компрометация одного
+# протокола не даёт возможности зафингерпринтить остальные.
 
-REALITY_PRIV=""; REALITY_PUB=""; REALITY_SNI="www.github.com"
-if (( WANT_TCPR || WANT_GRPCR )); then
+gen_reality_keypair() { # выводит "priv pub" одной строкой
+  local out priv pub
+  out=""
+  if docker ps --format '{{.Names}}' | grep -qx remnanode; then
+    out=$(docker exec remnanode xray x25519 2>/dev/null || true)
+  fi
+  if [[ -z "$out" ]]; then
+    out=$(docker run --rm --entrypoint xray remnawave/node:latest x25519 2>/dev/null || true)
+  fi
+  # Форматы вывода: "Private key: .../Public key: ..." (старый)
+  # или "PrivateKey: .../Password: ..." (новый)
+  priv=$(echo "$out" | grep -iE '^\s*Private ?[Kk]ey' | head -1 | sed 's/.*:\s*//' | tr -d ' \r')
+  pub=$(echo "$out" | grep -iE '^\s*(Public ?[Kk]ey|Password)' | head -1 | sed 's/.*:\s*//' | tr -d ' \r')
+  if [[ -z "$priv" || -z "$pub" ]]; then
+    log_error "Не удалось сгенерировать Reality-ключи (xray x25519). Вывод:"
+    echo "$out" >&2
+    exit 1
+  fi
+  echo "$priv $pub"
+}
+
+REALITY_SNI="www.github.com"
+REALITY_PRIV_XHTTP=""; REALITY_PUB_XHTTP=""
+REALITY_PRIV_TCP="";   REALITY_PUB_TCP=""
+REALITY_PRIV_GRPC="";  REALITY_PUB_GRPC=""
+
+if (( WANT_XHTTP || WANT_TCPR || WANT_GRPCR )); then
   echo ""
   read -r -p "SNI/dest для Reality (по умолчанию www.github.com): " REALITY_SNI_IN || true
   REALITY_SNI="${REALITY_SNI_IN:-www.github.com}"
 
   log_info "Генерация Reality-ключей..."
-  X25519_OUT=""
-  if docker ps --format '{{.Names}}' | grep -qx remnanode; then
-    X25519_OUT=$(docker exec remnanode xray x25519 2>/dev/null || true)
+  if (( WANT_XHTTP )); then
+    read -r REALITY_PRIV_XHTTP REALITY_PUB_XHTTP <<< "$(gen_reality_keypair)"
   fi
-  if [[ -z "$X25519_OUT" ]]; then
-    X25519_OUT=$(docker run --rm --entrypoint xray remnawave/node:latest x25519 2>/dev/null || true)
+  if (( WANT_TCPR )); then
+    read -r REALITY_PRIV_TCP REALITY_PUB_TCP <<< "$(gen_reality_keypair)"
   fi
-  # Форматы вывода: "Private key: .../Public key: ..." (старый)
-  # или "PrivateKey: .../Password: ..." (новый)
-  REALITY_PRIV=$(echo "$X25519_OUT" | grep -iE '^\s*Private ?[Kk]ey' | head -1 | sed 's/.*:\s*//' | tr -d ' \r')
-  REALITY_PUB=$(echo "$X25519_OUT" | grep -iE '^\s*(Public ?[Kk]ey|Password)' | head -1 | sed 's/.*:\s*//' | tr -d ' \r')
-  if [[ -z "$REALITY_PRIV" || -z "$REALITY_PUB" ]]; then
-    log_error "Не удалось сгенерировать Reality-ключи (xray x25519). Вывод:"
-    echo "$X25519_OUT"
-    exit 1
+  if (( WANT_GRPCR )); then
+    read -r REALITY_PRIV_GRPC REALITY_PUB_GRPC <<< "$(gen_reality_keypair)"
   fi
-  log_success "Reality-ключи сгенерированы (public key будет в итоговом отчёте)"
+  log_success "Reality-ключи сгенерированы (public key каждого протокола — в итоговом отчёте)"
 fi
 
 TROJAN_WS_PATH="/ws"
@@ -236,7 +256,7 @@ fi
 
 echo ""
 log_info "=== Открытие портов в UFW ==="
-(( WANT_XHTTP ))  && ufw_allow "$PORT_XHTTP"  tcp "vless-xhttp-tls"
+(( WANT_XHTTP ))  && ufw_allow "$PORT_XHTTP"  tcp "vless-xhttp-reality"
 (( WANT_HY2 ))    && ufw_allow "$PORT_HY2"    udp "hysteria2"
 (( WANT_TCPR ))   && ufw_allow "$PORT_TCPR"   tcp "vless-tcp-reality"
 (( WANT_GRPCR ))  && ufw_allow "$PORT_GRPCR"  tcp "vless-grpc-reality"
@@ -254,10 +274,10 @@ INBOUNDS=()
 DIRECT_TAGS=()
 
 if (( WANT_XHTTP )); then
-  DIRECT_TAGS+=('"VLESS_XHTTP_TLS"')
+  DIRECT_TAGS+=('"VLESS_XHTTP_REALITY"')
   INBOUNDS+=("$(cat <<EOF
     {
-      "tag": "VLESS_XHTTP_TLS",
+      "tag": "VLESS_XHTTP_REALITY",
       "port": $PORT_XHTTP,
       "listen": "0.0.0.0",
       "protocol": "vless",
@@ -265,7 +285,7 @@ if (( WANT_XHTTP )); then
       "sniffing": { "enabled": true, "destOverride": ["http", "tls", "quic"] },
       "streamSettings": {
         "network": "xhttp",
-        "security": "tls",
+        "security": "reality",
         "xhttpSettings": {
           "host": "www.github.com",
           "mode": "auto",
@@ -278,12 +298,13 @@ if (( WANT_XHTTP )); then
             "scStreamUpServerSecs": "120-240"
           }
         },
-        "tlsSettings": {
-          "serverName": "$DOMAIN",
-          "alpn": ["h2", "http/1.1"],
-          "certificates": [
-            { "certificateFile": "$SSL_CERT", "keyFile": "$SSL_KEY" }
-          ]
+        "realitySettings": {
+          "dest": "$REALITY_SNI:443",
+          "show": false,
+          "xver": 0,
+          "shortIds": [$(gen_short_ids)],
+          "privateKey": "$REALITY_PRIV_XHTTP",
+          "serverNames": ["$REALITY_SNI"]
         }
       }
     }
@@ -309,7 +330,7 @@ if (( WANT_GRPCR )); then
           "show": false,
           "xver": 0,
           "shortIds": [$(gen_short_ids)],
-          "privateKey": "$REALITY_PRIV",
+          "privateKey": "$REALITY_PRIV_GRPC",
           "serverNames": ["$REALITY_SNI"]
         }
       }
@@ -335,7 +356,7 @@ if (( WANT_TCPR )); then
           "show": false,
           "xver": 0,
           "shortIds": [$(gen_short_ids)],
-          "privateKey": "$REALITY_PRIV",
+          "privateKey": "$REALITY_PRIV_TCP",
           "serverNames": ["$REALITY_SNI"]
         }
       }
@@ -484,16 +505,18 @@ echo ""
 echo -e "${GREEN}=== Готово! ===${NC}"
 echo ""
 echo -e "${BLUE}Настроенные протоколы:${NC}"
-(( WANT_XHTTP ))  && echo "  • VLESS XHTTP + TLS      → ${PORT_XHTTP}/tcp  (SNI: $DOMAIN)"
+(( WANT_XHTTP ))  && echo "  • VLESS XHTTP + Reality  → ${PORT_XHTTP}/tcp  (SNI: $REALITY_SNI)"
 (( WANT_HY2 ))    && echo "  • Hysteria2              → ${PORT_HY2}/udp  (SNI: $DOMAIN)"
 (( WANT_TCPR ))   && echo "  • VLESS TCP + Reality    → ${PORT_TCPR}/tcp  (SNI: $REALITY_SNI)"
 (( WANT_GRPCR ))  && echo "  • VLESS gRPC + Reality   → ${PORT_GRPCR}/tcp  (SNI: $REALITY_SNI, serviceName: grpc-stream)"
 (( WANT_TROJAN )) && echo "  • Trojan WS + TLS        → ${PORT_TROJAN}/tcp  (path: $TROJAN_WS_PATH)"
 (( WANT_BRIDGE )) && echo "  • Bridge (каскад)        → ${PORT_BRIDGE}/tcp"
-if [[ -n "$REALITY_PUB" ]]; then
+if [[ -n "$REALITY_PUB_XHTTP$REALITY_PUB_TCP$REALITY_PUB_GRPC" ]]; then
   echo ""
-  echo -e "${BLUE}Reality public key (для клиентов / хостов в панели):${NC}"
-  echo "  $REALITY_PUB"
+  echo -e "${BLUE}Reality public key (для клиентов / хостов в панели, свой на каждый протокол):${NC}"
+  (( WANT_XHTTP )) && echo "  XHTTP: $REALITY_PUB_XHTTP"
+  (( WANT_TCPR ))  && echo "  TCP:   $REALITY_PUB_TCP"
+  (( WANT_GRPCR )) && echo "  gRPC:  $REALITY_PUB_GRPC"
 fi
 echo ""
 echo -e "${YELLOW}Что дальше:${NC}"
